@@ -33,13 +33,14 @@ export const START_BIT = 0 as const;
 export const STOP_BIT = 1 as const;
 export const BYTE_SIZE: number = 8;
 
-export const PREAMBLE_BYTES: number[] = [0xaa, 0x55, 0xaa, 0x55];
+export const PREAMBLE_BYTES: number[] = [0xaa, 0x55];
 export const PREAMBLE_SYNC_WORD: number = 0xf0;
 export const ABSOLUTE_ENERGY_FLOOR: number = 0.00001;
 export const CRC8_POLY: number = 0x31;
 export const CRC8_INIT: number = 0x00;
 
 export const DEFAULT_FFT_SIZE: number = 1024;
+export const DETECTION_WINDOW_SAMPLES: number = 256;
 
 export function resolveFrequencyProfile(baseFrequencyHz: number, separationHz: number): FrequencyProfile {
   return {

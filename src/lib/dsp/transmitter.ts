@@ -38,9 +38,9 @@ export class SonicTransmitter {
       new Float32Array([0, 1, 0.5, 0.2]),
       new Float32Array([0, 0, 0, 0]),
     );
-    const attackS: number = Math.min(0.003, symbolDurationS * 0.35);
-    const releaseStartFactor: number = 0.85;
-    const sustainLevel: number = amplitude * 0.35;
+    const attackS: number = Math.min(0.004, symbolDurationS * 0.25);
+    const releaseStart: number = symbolDurationS * 0.75;
+    const sustainLevel: number = amplitude * 0.65;
 
     bits.forEach((bit: number, bitIndex: number) => {
       const frequencyHz: number = bit === 0 ? profile.zeroHz : profile.oneHz;
@@ -52,12 +52,8 @@ export class SonicTransmitter {
       const gainNode: GainNode = context.createGain();
       gainNode.gain.setValueAtTime(0, startTime);
       gainNode.gain.linearRampToValueAtTime(amplitude, startTime + attackS);
-      gainNode.gain.setTargetAtTime(
-        sustainLevel,
-        startTime + attackS,
-        Math.max(0.003, Math.min(0.012, symbolDurationS * 0.35)),
-      );
-      gainNode.gain.setTargetAtTime(0, startTime + symbolDurationS * releaseStartFactor, 0.003);
+      gainNode.gain.linearRampToValueAtTime(sustainLevel, startTime + releaseStart);
+      gainNode.gain.linearRampToValueAtTime(0, startTime + symbolDurationS);
 
       oscillator.connect(gainNode);
       gainNode.connect(context.destination);

@@ -57,7 +57,7 @@ export class SonicReceiver {
       baudRateMs: 80,
       baseFrequencyHz: CHIME_BASE_HZ,
       separationHz: CHIME_SEPARATION_HZ,
-      amplitude: 0.2,
+      amplitude: 0.4,
       stealthMode: false,
     };
     this.receivedBytes = [];

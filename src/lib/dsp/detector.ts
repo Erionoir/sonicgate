@@ -1,5 +1,10 @@
 import { goertzelEnergy } from "@/lib/dsp/goertzel";
-import { ABSOLUTE_ENERGY_FLOOR, DEFAULT_FFT_SIZE, FrequencyProfile } from "@/lib/dsp/protocol";
+import {
+  ABSOLUTE_ENERGY_FLOOR,
+  DEFAULT_FFT_SIZE,
+  DETECTION_WINDOW_SAMPLES,
+  FrequencyProfile,
+} from "@/lib/dsp/protocol";
 import { ToneDecision } from "@/types/modem";
 
 export class ToneDetector {
@@ -20,7 +25,7 @@ export class ToneDetector {
     this.analyser.smoothingTimeConstant = 0;
     this.sampleBuffer = new Float32Array<ArrayBuffer>(new ArrayBuffer(this.analyser.fftSize * 4));
     this.noiseFloor = 0.0005;
-    this.thresholdRatio = 1.6;
+    this.thresholdRatio = 1.35;
   }
 
   public setProfile(profile: FrequencyProfile): void {
@@ -62,20 +67,23 @@ export class ToneDetector {
 
     const average: number = samples.length === 0 ? this.noiseFloor : samples.reduce((a, b) => a + b, 0) / samples.length;
     this.noiseFloor = Math.max(average, 0.000001);
-    this.thresholdRatio = 1.8;
+    this.thresholdRatio = 1.4;
     return this.noiseFloor;
   }
 
   public detectBit(): ToneDecision {
     this.analyser.getFloatTimeDomainData(this.sampleBuffer);
+    const detectionSlice: Float32Array<ArrayBuffer> = this.sampleBuffer.subarray(
+      Math.max(0, this.sampleBuffer.length - DETECTION_WINDOW_SAMPLES),
+    );
 
     const zeroEnergy: number = goertzelEnergy(
-      this.sampleBuffer,
+      detectionSlice,
       this.profile.zeroHz,
       this.analyser.context.sampleRate,
     );
     const oneEnergy: number = goertzelEnergy(
-      this.sampleBuffer,
+      detectionSlice,
       this.profile.oneHz,
       this.analyser.context.sampleRate,
     );
@@ -115,8 +123,11 @@ export class ToneDetector {
   }
 
   private averageTargetEnergy(samples: Float32Array<ArrayBuffer>): number {
-    const zeroEnergy: number = goertzelEnergy(samples, this.profile.zeroHz, this.analyser.context.sampleRate);
-    const oneEnergy: number = goertzelEnergy(samples, this.profile.oneHz, this.analyser.context.sampleRate);
+    const detectionSlice: Float32Array<ArrayBuffer> = samples.subarray(
+      Math.max(0, samples.length - DETECTION_WINDOW_SAMPLES),
+    );
+    const zeroEnergy: number = goertzelEnergy(detectionSlice, this.profile.zeroHz, this.analyser.context.sampleRate);
+    const oneEnergy: number = goertzelEnergy(detectionSlice, this.profile.oneHz, this.analyser.context.sampleRate);
     return (zeroEnergy + oneEnergy) / 2;
   }
 }
