@@ -1,0 +1,7 @@
+type ReceiveLayoutProps = {
+  children: React.ReactNode;
+};
+
+export default function ReceiveLayout({ children }: ReceiveLayoutProps): React.JSX.Element {
+  return <div className="mx-auto w-full max-w-6xl px-4 py-6 md:px-6">{children}</div>;
+}
