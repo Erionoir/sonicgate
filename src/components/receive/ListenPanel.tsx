@@ -1,12 +1,27 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { CalibrationPanel } from "@/components/receive/CalibrationPanel";
 import { EncryptionToggle } from "@/components/transmit/EncryptionToggle";
 import { Spectrogram } from "@/components/receive/Spectrogram";
 import { TerminalFeed } from "@/components/receive/TerminalFeed";
 import { useReceiver } from "@/hooks/useReceiver";
 
+function detectIOSDevice(): boolean {
+  if (typeof navigator === "undefined") {
+    return false;
+  }
+
+  const userAgent: string = navigator.userAgent;
+  const platform: string = navigator.platform;
+  return /iPad|iPhone|iPod/.test(userAgent) || (platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
+
 export function ListenPanel(): React.JSX.Element {
+  const [isIOSDevice, setIsIOSDevice] = useState(false);
+  const [showIOSWarning, setShowIOSWarning] = useState(false);
+  const [dismissedIOSWarning, setDismissedIOSWarning] = useState(false);
+
   const {
     isListening,
     terminal,
@@ -23,6 +38,17 @@ export function ListenPanel(): React.JSX.Element {
     calibrate,
   } = useReceiver();
 
+  useEffect(() => {
+    setIsIOSDevice(detectIOSDevice());
+  }, []);
+
+  const handleStartListening = (): void => {
+    if (isIOSDevice && !dismissedIOSWarning) {
+      setShowIOSWarning(true);
+    }
+    void start();
+  };
+
   return (
     <div className="grid gap-4 md:grid-cols-2">
       <section className="rounded-lg border border-cyan-500/40 bg-zinc-900/80 p-4 md:col-span-2">
@@ -32,7 +58,7 @@ export function ListenPanel(): React.JSX.Element {
           {!isListening ? (
             <button
               type="button"
-              onClick={() => void start()}
+              onClick={handleStartListening}
               className="rounded-md border border-cyan-500 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-cyan-300 hover:bg-cyan-500/10"
             >
               Start Listen
@@ -59,6 +85,22 @@ export function ListenPanel(): React.JSX.Element {
             {status} · confidence {confidence.toFixed(2)}
           </span>
         </div>
+
+        {showIOSWarning ? (
+          <div className="mt-3 flex items-start justify-between gap-3 rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+            <p>Audio quality may vary on iOS. System noise suppression cannot be fully disabled.</p>
+            <button
+              type="button"
+              onClick={() => {
+                setShowIOSWarning(false);
+                setDismissedIOSWarning(true);
+              }}
+              className="rounded border border-amber-400/40 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-amber-200 hover:bg-amber-400/10"
+            >
+              Dismiss
+            </button>
+          </div>
+        ) : null}
       </section>
 
       <CalibrationPanel threshold={noiseThreshold} isListening={isListening} onCalibrate={calibrate} />

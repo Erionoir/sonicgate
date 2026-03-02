@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { clampBaseFrequency, MAX_BAUD_MS, MAX_BASE_FREQUENCY_HZ, MIN_BAUD_MS, MIN_BASE_FREQUENCY_HZ, ULTRASONIC_MIN_HZ } from "@/lib/dsp/protocol";
 import { ModemConfig } from "@/types/modem";
 
@@ -10,6 +11,21 @@ type SignalSettingsProps = {
 
 export function SignalSettings({ config, onChange }: SignalSettingsProps): React.JSX.Element {
   const minBase: number = config.stealthMode ? ULTRASONIC_MIN_HZ : MIN_BASE_FREQUENCY_HZ;
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
+
+  useEffect(() => {
+    const mediaQuery: MediaQueryList = window.matchMedia("(max-width: 767px)");
+    const updateViewportFlag = (): void => {
+      setIsMobileViewport(mediaQuery.matches);
+    };
+
+    updateViewportFlag();
+    mediaQuery.addEventListener("change", updateViewportFlag);
+
+    return () => {
+      mediaQuery.removeEventListener("change", updateViewportFlag);
+    };
+  }, []);
 
   return (
     <section className="rounded-lg border border-zinc-700 bg-zinc-900/80 p-4">
@@ -70,6 +86,12 @@ export function SignalSettings({ config, onChange }: SignalSettingsProps): React
           />
           Stealth Mode (Ultrasonic)
         </label>
+
+        {config.stealthMode && isMobileViewport ? (
+          <p className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-xs text-amber-200">
+            Stealth mode may not transmit reliably on mobile speakers and microphones.
+          </p>
+        ) : null}
       </div>
     </section>
   );

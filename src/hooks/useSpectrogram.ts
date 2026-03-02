@@ -24,15 +24,45 @@ export function useSpectrogram({ analyser, canvasRef, isActive }: UseSpectrogram
       return;
     }
 
-    const width: number = canvas.width;
-    const height: number = canvas.height;
     const frequencyData: Uint8Array<ArrayBuffer> = new Uint8Array<ArrayBuffer>(
       new ArrayBuffer(analyser.frequencyBinCount),
     );
     let frameId: number = 0;
+    let resizeObserver: ResizeObserver | null = null;
+
+    const syncCanvasSize = (): void => {
+      const displayWidth: number = canvas.clientWidth;
+      const displayHeight: number = canvas.clientHeight;
+
+      if (displayWidth <= 0 || displayHeight <= 0) {
+        return;
+      }
+
+      const pixelRatio: number = Math.max(1, window.devicePixelRatio || 1);
+      const nextWidth: number = Math.floor(displayWidth * pixelRatio);
+      const nextHeight: number = Math.floor(displayHeight * pixelRatio);
+
+      if (canvas.width !== nextWidth || canvas.height !== nextHeight) {
+        canvas.width = nextWidth;
+        canvas.height = nextHeight;
+        context.clearRect(0, 0, nextWidth, nextHeight);
+      }
+    };
+
+    syncCanvasSize();
+    resizeObserver = new ResizeObserver(syncCanvasSize);
+    resizeObserver.observe(canvas);
 
     const draw = (): void => {
       analyser.getByteFrequencyData(frequencyData);
+      const width: number = canvas.width;
+      const height: number = canvas.height;
+
+      if (width < 2 || height < 1) {
+        frameId = window.requestAnimationFrame(draw);
+        return;
+      }
+
       const previousFrame: ImageData = context.getImageData(1, 0, width - 1, height);
       context.putImageData(previousFrame, 0, 0);
 
@@ -56,6 +86,7 @@ export function useSpectrogram({ analyser, canvasRef, isActive }: UseSpectrogram
 
     return () => {
       window.cancelAnimationFrame(frameId);
+      resizeObserver?.disconnect();
     };
   }, [analyser, canvasRef, isActive]);
 }
