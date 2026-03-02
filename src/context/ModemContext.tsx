@@ -6,7 +6,7 @@ import { ModemContextValue } from "@/types/modem";
 const DEFAULT_MODEM_CONFIG = {
   baudRateMs: 50,
   baseFrequencyHz: 18_500,
-  separationHz: 500,
+  separationHz: 1_000,
   amplitude: 0.2,
   stealthMode: true,
 };

@@ -1,6 +1,45 @@
 import { bitsToByteLsbFirst } from "@/lib/dsp/encode";
 import { BYTE_SIZE } from "@/lib/dsp/protocol";
 
+export class ManchesterDecoder {
+  private readonly physicalBits: number[];
+
+  constructor() {
+    this.physicalBits = [];
+  }
+
+  public inputBit(bit: 0 | 1 | null): 0 | 1 | null {
+    if (bit === null) {
+      return null;
+    }
+
+    this.physicalBits.push(bit);
+
+    while (this.physicalBits.length >= 2) {
+      const first: number = this.physicalBits[0] ?? 0;
+      const second: number = this.physicalBits[1] ?? 0;
+
+      if (first === 0 && second === 1) {
+        this.physicalBits.splice(0, 2);
+        return 0;
+      }
+
+      if (first === 1 && second === 0) {
+        this.physicalBits.splice(0, 2);
+        return 1;
+      }
+
+      this.physicalBits.shift();
+    }
+
+    return null;
+  }
+
+  public reset(): void {
+    this.physicalBits.length = 0;
+  }
+}
+
 enum DecoderState {
   Idle,
   ReadingBits,

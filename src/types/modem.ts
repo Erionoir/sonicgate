@@ -50,6 +50,7 @@ export interface UseReceiverResult {
   rawTerminal: string;
   terminal: string;
   decryptStatus: "idle" | "working" | "error";
+  crcError: boolean;
   status: string;
   noiseThreshold: number;
   confidence: number;

@@ -23,7 +23,7 @@ export class SonicTransmitter {
     config: ModemConfig,
     options?: TransmitOptions,
   ): Promise<void> {
-    const symbolDurationS: number = config.baudRateMs / 1000;
+    const symbolDurationS: number = config.baudRateMs / 2000;
     const amplitude: number = config.amplitude;
     const profile: FrequencyProfile = resolveFrequencyProfile(config.baseFrequencyHz, config.separationHz);
 

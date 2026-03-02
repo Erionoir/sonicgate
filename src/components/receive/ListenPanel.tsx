@@ -26,6 +26,7 @@ export function ListenPanel(): React.JSX.Element {
     isListening,
     terminal,
     decryptStatus,
+    crcError,
     status,
     noiseThreshold,
     confidence,
@@ -99,6 +100,12 @@ export function ListenPanel(): React.JSX.Element {
             >
               Dismiss
             </button>
+          </div>
+        ) : null}
+
+        {crcError ? (
+          <div className="mt-3 rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+            Message received but CRC check failed — data may be corrupted.
           </div>
         ) : null}
       </section>

@@ -1,12 +1,14 @@
-import { decodeBytesToMessage } from "@/lib/dsp/encode";
-import { FramedBitDecoder } from "@/lib/dsp/decoder";
+import { crc8, decodeBytesToMessage } from "@/lib/dsp/encode";
+import { FramedBitDecoder, ManchesterDecoder } from "@/lib/dsp/decoder";
 import { ToneDetector } from "@/lib/dsp/detector";
-import { resolveFrequencyProfile } from "@/lib/dsp/protocol";
+import { PREAMBLE_BYTES, PREAMBLE_SYNC_WORD, resolveFrequencyProfile } from "@/lib/dsp/protocol";
 import { ModemConfig, ToneDecision } from "@/types/modem";
 
 export type ReceiverEvents = {
   onByte?: (value: number) => void;
   onMessageChunk?: (chunk: string) => void;
+  onPacket?: (message: string) => void;
+  onCrcError?: () => void;
   onBit?: (decision: ToneDecision) => void;
   onError?: (error: Error) => void;
 };
@@ -22,6 +24,8 @@ export class SonicReceiver {
 
   private decoder: FramedBitDecoder;
 
+  private manchesterDecoder: ManchesterDecoder;
+
   private rafId: number | null;
 
   private nextSymbolTime: number;
@@ -29,6 +33,14 @@ export class SonicReceiver {
   private config: ModemConfig;
 
   private readonly receivedBytes: number[];
+
+  private readonly syncBytes: number[];
+
+  private lockedToPacket: boolean;
+
+  private expectedPayloadLength: number | null;
+
+  private readonly packetPayloadBytes: number[];
 
   private readonly events: ReceiverEvents;
 
@@ -38,16 +50,21 @@ export class SonicReceiver {
     this.analyser = null;
     this.detector = null;
     this.decoder = new FramedBitDecoder();
+    this.manchesterDecoder = new ManchesterDecoder();
     this.rafId = null;
     this.nextSymbolTime = 0;
     this.config = {
       baudRateMs: 50,
       baseFrequencyHz: 18_500,
-      separationHz: 500,
+      separationHz: 1_000,
       amplitude: 0.2,
       stealthMode: true,
     };
     this.receivedBytes = [];
+    this.syncBytes = [];
+    this.lockedToPacket = false;
+    this.expectedPayloadLength = null;
+    this.packetPayloadBytes = [];
     this.events = events ?? {};
   }
 
@@ -81,7 +98,8 @@ export class SonicReceiver {
         resolveFrequencyProfile(config.baseFrequencyHz, config.separationHz),
       );
 
-      this.nextSymbolTime = context.currentTime + this.config.baudRateMs / 1000;
+      this.resetRuntimeState();
+      this.nextSymbolTime = context.currentTime + this.config.baudRateMs / 2000;
       this.runClock(context);
     } catch (error: unknown) {
       this.events.onError?.(error instanceof Error ? error : new Error("Receiver start failed."));
@@ -115,11 +133,12 @@ export class SonicReceiver {
     this.sourceNode = null;
     this.analyser = null;
     this.detector = null;
-    this.decoder.reset();
+    this.resetRuntimeState();
   }
 
   public clear(): void {
     this.receivedBytes.length = 0;
+    this.resetRuntimeState();
   }
 
   public getMessage(): string {
@@ -127,7 +146,7 @@ export class SonicReceiver {
   }
 
   private runClock(context: AudioContext): void {
-    const symbolDurationS: number = this.config.baudRateMs / 1000;
+    const symbolDurationS: number = this.config.baudRateMs / 2000;
 
     const tick = (): void => {
       if (this.detector === null) {
@@ -138,12 +157,11 @@ export class SonicReceiver {
         const decision: ToneDecision = this.detector.detectBit();
         this.events.onBit?.(decision);
 
-        const decodedByte: number | null = this.decoder.inputBit(decision.bit);
+        const logicalBit: 0 | 1 | null = this.manchesterDecoder.inputBit(decision.bit);
+        const decodedByte: number | null = this.decoder.inputBit(logicalBit);
 
         if (decodedByte !== null) {
-          this.receivedBytes.push(decodedByte);
-          this.events.onByte?.(decodedByte);
-          this.events.onMessageChunk?.(decodeBytesToMessage([decodedByte]));
+          this.processDecodedByte(decodedByte);
         }
 
         this.nextSymbolTime += symbolDurationS;
@@ -153,5 +171,82 @@ export class SonicReceiver {
     };
 
     this.rafId = window.requestAnimationFrame(tick);
+  }
+
+  private processDecodedByte(decodedByte: number): void {
+    this.events.onByte?.(decodedByte);
+
+    if (!this.lockedToPacket) {
+      this.syncBytes.push(decodedByte);
+      const signatureLength: number = PREAMBLE_BYTES.length + 1;
+      if (this.syncBytes.length > signatureLength) {
+        this.syncBytes.shift();
+      }
+
+      if (this.hasPacketSignature()) {
+        this.lockedToPacket = true;
+        this.expectedPayloadLength = null;
+        this.packetPayloadBytes.length = 0;
+      }
+      return;
+    }
+
+    if (this.expectedPayloadLength === null) {
+      this.expectedPayloadLength = decodedByte;
+      if (this.expectedPayloadLength < 0 || this.expectedPayloadLength > 255) {
+        this.resetPacketState();
+      }
+      return;
+    }
+
+    this.packetPayloadBytes.push(decodedByte);
+    const requiredLength: number = this.expectedPayloadLength + 1;
+    if (this.packetPayloadBytes.length < requiredLength) {
+      return;
+    }
+
+    const payloadBytes: number[] = this.packetPayloadBytes.slice(0, this.expectedPayloadLength);
+    const receivedCrc: number = this.packetPayloadBytes[this.expectedPayloadLength] ?? 0;
+    const computedCrc: number = crc8([this.expectedPayloadLength, ...payloadBytes]);
+
+    if (receivedCrc !== computedCrc) {
+      this.events.onCrcError?.();
+      this.resetPacketState();
+      return;
+    }
+
+    this.receivedBytes.push(...payloadBytes);
+    const packetMessage: string = decodeBytesToMessage(payloadBytes);
+    this.events.onPacket?.(packetMessage);
+    this.events.onMessageChunk?.(packetMessage);
+    this.resetPacketState();
+  }
+
+  private hasPacketSignature(): boolean {
+    const signatureLength: number = PREAMBLE_BYTES.length + 1;
+    if (this.syncBytes.length !== signatureLength) {
+      return false;
+    }
+
+    for (let index: number = 0; index < PREAMBLE_BYTES.length; index += 1) {
+      if ((this.syncBytes[index] ?? -1) !== PREAMBLE_BYTES[index]) {
+        return false;
+      }
+    }
+
+    return (this.syncBytes[PREAMBLE_BYTES.length] ?? -1) === PREAMBLE_SYNC_WORD;
+  }
+
+  private resetPacketState(): void {
+    this.lockedToPacket = false;
+    this.expectedPayloadLength = null;
+    this.packetPayloadBytes.length = 0;
+    this.syncBytes.length = 0;
+  }
+
+  private resetRuntimeState(): void {
+    this.decoder.reset();
+    this.manchesterDecoder.reset();
+    this.resetPacketState();
   }
 }

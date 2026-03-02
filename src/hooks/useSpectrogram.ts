@@ -65,6 +65,7 @@ export function useSpectrogram({ analyser, canvasRef, isActive }: UseSpectrogram
 
       const previousFrame: ImageData = context.getImageData(1, 0, width - 1, height);
       context.putImageData(previousFrame, 0, 0);
+      context.clearRect(width - 1, 0, 1, height);
 
       for (let y: number = 0; y < height; y += 1) {
         const ratio: number = y / height;
@@ -86,6 +87,7 @@ export function useSpectrogram({ analyser, canvasRef, isActive }: UseSpectrogram
 
     return () => {
       window.cancelAnimationFrame(frameId);
+      context.clearRect(0, 0, canvas.width, canvas.height);
       resizeObserver?.disconnect();
     };
   }, [analyser, canvasRef, isActive]);

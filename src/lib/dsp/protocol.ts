@@ -11,7 +11,7 @@ export const ULTRASONIC_MIN_HZ: number = 18_500;
 
 export const PRIMARY_PROFILE: FrequencyProfile = {
   zeroHz: 18_500,
-  oneHz: 19_000,
+  oneHz: 19_500,
 };
 
 export const FALLBACK_PROFILE: FrequencyProfile = {
@@ -29,6 +29,12 @@ export const RAMP_DURATION_S: number = RAMP_DURATION_MS / 1000;
 export const START_BIT = 0 as const;
 export const STOP_BIT = 1 as const;
 export const BYTE_SIZE: number = 8;
+
+export const PREAMBLE_BYTES: number[] = [0xaa, 0x55, 0xaa, 0x55];
+export const PREAMBLE_SYNC_WORD: number = 0xf0;
+export const ABSOLUTE_ENERGY_FLOOR: number = 0.00001;
+export const CRC8_POLY: number = 0x31;
+export const CRC8_INIT: number = 0x00;
 
 export const DEFAULT_FFT_SIZE: number = 2048;
 

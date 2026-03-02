@@ -1,5 +1,5 @@
 import { goertzelEnergy } from "@/lib/dsp/goertzel";
-import { DEFAULT_FFT_SIZE, FrequencyProfile } from "@/lib/dsp/protocol";
+import { ABSOLUTE_ENERGY_FLOOR, DEFAULT_FFT_SIZE, FrequencyProfile } from "@/lib/dsp/protocol";
 import { ToneDecision } from "@/types/modem";
 
 export class ToneDetector {
@@ -80,14 +80,20 @@ export class ToneDetector {
       this.analyser.context.sampleRate,
     );
 
-    const averageEnergy: number = (zeroEnergy + oneEnergy) / 2;
-    this.noiseFloor = this.noiseFloor * 0.94 + averageEnergy * 0.06;
-
     const stronger: number = Math.max(zeroEnergy, oneEnergy);
     const weaker: number = Math.min(zeroEnergy, oneEnergy);
     const ratio: number = stronger / Math.max(weaker, 0.000001);
+    const averageEnergy: number = (zeroEnergy + oneEnergy) / 2;
+    const reliable: boolean =
+      ratio >= this.thresholdRatio &&
+      stronger > this.noiseFloor * 1.2 &&
+      stronger > ABSOLUTE_ENERGY_FLOOR;
+
+    if (!reliable) {
+      this.noiseFloor = this.noiseFloor * 0.94 + averageEnergy * 0.06;
+    }
+
     const confidence: number = stronger / Math.max(this.noiseFloor, 0.000001);
-    const reliable: boolean = ratio >= this.thresholdRatio && stronger > this.noiseFloor * 1.2;
 
     if (!reliable) {
       return {

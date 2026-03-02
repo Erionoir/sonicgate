@@ -10,6 +10,7 @@ export function useReceiver(): UseReceiverResult {
   const { ensureReady, modemConfig } = useAudioModem();
   const [isListening, setIsListening] = useState<boolean>(false);
   const [status, setStatus] = useState<string>("Idle");
+  const [crcError, setCrcError] = useState<boolean>(false);
   const [noiseThreshold, setNoiseThreshold] = useState<number>(0);
   const [confidence, setConfidence] = useState<number>(0);
   const [encryption, setEncryptionState] = useState<EncryptionConfig>({
@@ -21,8 +22,13 @@ export function useReceiver(): UseReceiverResult {
   const receiver: SonicReceiver = useMemo(
     () =>
       new SonicReceiver({
-        onMessageChunk: (chunk: string) => {
+        onPacket: (chunk: string) => {
+          setCrcError(false);
           processChunk(chunk);
+        },
+        onCrcError: () => {
+          setCrcError(true);
+          setStatus("CRC mismatch");
         },
         onBit: (decision: ToneDecision) => {
           setConfidence(decision.confidence);
@@ -45,6 +51,7 @@ export function useReceiver(): UseReceiverResult {
     }
 
     setStatus("Listening...");
+    setCrcError(false);
     try {
       const context: AudioContext = await ensureReady();
       await receiver.start(context, modemConfig);
@@ -65,6 +72,7 @@ export function useReceiver(): UseReceiverResult {
   const clear = (): void => {
     receiver.clear();
     clearDecrypt();
+    setCrcError(false);
   };
 
   const calibrate = async (): Promise<void> => {
@@ -93,6 +101,7 @@ export function useReceiver(): UseReceiverResult {
     rawTerminal,
     terminal: displayTerminal,
     decryptStatus,
+    crcError,
     status,
     noiseThreshold,
     confidence,
