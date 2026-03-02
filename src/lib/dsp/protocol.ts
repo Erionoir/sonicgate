@@ -5,24 +5,27 @@ export type FrequencyProfile = {
 
 export const MIN_BAUD_MS: number = 10;
 export const MAX_BAUD_MS: number = 200;
-export const MIN_BASE_FREQUENCY_HZ: number = 16_000;
+export const MIN_BASE_FREQUENCY_HZ: number = 300;
 export const MAX_BASE_FREQUENCY_HZ: number = 20_000;
 export const ULTRASONIC_MIN_HZ: number = 18_500;
 
+export const CHIME_BASE_HZ: number = 2_000;
+export const CHIME_SEPARATION_HZ: number = 500;
+
 export const PRIMARY_PROFILE: FrequencyProfile = {
-  zeroHz: 18_500,
-  oneHz: 19_500,
+  zeroHz: CHIME_BASE_HZ,
+  oneHz: CHIME_BASE_HZ + CHIME_SEPARATION_HZ,
 };
 
 export const FALLBACK_PROFILE: FrequencyProfile = {
-  zeroHz: 17_200,
-  oneHz: 17_700,
+  zeroHz: 1_400,
+  oneHz: 1_900,
 };
 
 export const FREQUENCY_PROFILES: FrequencyProfile[] = [PRIMARY_PROFILE, FALLBACK_PROFILE];
 
-export const SYMBOL_DURATION_MS: number = 50;
-export const RAMP_DURATION_MS: number = 10;
+export const SYMBOL_DURATION_MS: number = 80;
+export const RAMP_DURATION_MS: number = 5;
 export const SYMBOL_DURATION_S: number = SYMBOL_DURATION_MS / 1000;
 export const RAMP_DURATION_S: number = RAMP_DURATION_MS / 1000;
 
@@ -36,7 +39,7 @@ export const ABSOLUTE_ENERGY_FLOOR: number = 0.00001;
 export const CRC8_POLY: number = 0x31;
 export const CRC8_INIT: number = 0x00;
 
-export const DEFAULT_FFT_SIZE: number = 2048;
+export const DEFAULT_FFT_SIZE: number = 1024;
 
 export function resolveFrequencyProfile(baseFrequencyHz: number, separationHz: number): FrequencyProfile {
   return {

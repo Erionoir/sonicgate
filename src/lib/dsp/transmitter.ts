@@ -1,5 +1,5 @@
 import { encodeMessageToBits } from "@/lib/dsp/encode";
-import { FrequencyProfile, RAMP_DURATION_S, resolveFrequencyProfile } from "@/lib/dsp/protocol";
+import { FrequencyProfile, resolveFrequencyProfile } from "@/lib/dsp/protocol";
 import { ModemConfig } from "@/types/modem";
 
 export type TransmitOptions = {
@@ -34,25 +34,36 @@ export class SonicTransmitter {
     let startTime: number = context.currentTime + 0.06;
     const firstStartTime: number = startTime;
     const finalTime: number = startTime + bits.length * symbolDurationS;
+    const chimeWave: PeriodicWave = context.createPeriodicWave(
+      new Float32Array([0, 1, 0.5, 0.2]),
+      new Float32Array([0, 0, 0, 0]),
+    );
+    const attackS: number = Math.min(0.003, symbolDurationS * 0.35);
+    const releaseStartFactor: number = 0.85;
+    const sustainLevel: number = amplitude * 0.35;
 
     bits.forEach((bit: number, bitIndex: number) => {
       const frequencyHz: number = bit === 0 ? profile.zeroHz : profile.oneHz;
 
       const oscillator: OscillatorNode = context.createOscillator();
-      oscillator.type = "sine";
+      oscillator.setPeriodicWave(chimeWave);
       oscillator.frequency.setValueAtTime(frequencyHz, startTime);
 
       const gainNode: GainNode = context.createGain();
       gainNode.gain.setValueAtTime(0, startTime);
-      gainNode.gain.linearRampToValueAtTime(amplitude, startTime + RAMP_DURATION_S);
-      gainNode.gain.setValueAtTime(amplitude, startTime + Math.max(0, symbolDurationS - RAMP_DURATION_S));
-      gainNode.gain.linearRampToValueAtTime(0, startTime + symbolDurationS);
+      gainNode.gain.linearRampToValueAtTime(amplitude, startTime + attackS);
+      gainNode.gain.setTargetAtTime(
+        sustainLevel,
+        startTime + attackS,
+        Math.max(0.003, Math.min(0.012, symbolDurationS * 0.35)),
+      );
+      gainNode.gain.setTargetAtTime(0, startTime + symbolDurationS * releaseStartFactor, 0.003);
 
       oscillator.connect(gainNode);
       gainNode.connect(context.destination);
 
       oscillator.start(startTime);
-      oscillator.stop(startTime + symbolDurationS + 0.004);
+      oscillator.stop(startTime + symbolDurationS + 0.01);
 
       options?.onBitScheduled?.(bit, bitIndex);
 

@@ -4,8 +4,11 @@ import { BYTE_SIZE } from "@/lib/dsp/protocol";
 export class ManchesterDecoder {
   private readonly physicalBits: number[];
 
+  private invalidPairStreak: number;
+
   constructor() {
     this.physicalBits = [];
+    this.invalidPairStreak = 0;
   }
 
   public inputBit(bit: 0 | 1 | null): 0 | 1 | null {
@@ -20,13 +23,21 @@ export class ManchesterDecoder {
       const second: number = this.physicalBits[1] ?? 0;
 
       if (first === 0 && second === 1) {
+        this.invalidPairStreak = 0;
         this.physicalBits.splice(0, 2);
         return 0;
       }
 
       if (first === 1 && second === 0) {
+        this.invalidPairStreak = 0;
         this.physicalBits.splice(0, 2);
         return 1;
+      }
+
+      this.invalidPairStreak += 1;
+      if (this.invalidPairStreak >= 2) {
+        this.reset();
+        return null;
       }
 
       this.physicalBits.shift();
@@ -37,6 +48,7 @@ export class ManchesterDecoder {
 
   public reset(): void {
     this.physicalBits.length = 0;
+    this.invalidPairStreak = 0;
   }
 }
 

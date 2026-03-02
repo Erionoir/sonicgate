@@ -1,14 +1,15 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { CHIME_BASE_HZ, CHIME_SEPARATION_HZ, clampBaseFrequency } from "@/lib/dsp/protocol";
 import { ModemContextValue } from "@/types/modem";
 
 const DEFAULT_MODEM_CONFIG = {
-  baudRateMs: 50,
-  baseFrequencyHz: 18_500,
-  separationHz: 1_000,
+  baudRateMs: 80,
+  baseFrequencyHz: CHIME_BASE_HZ,
+  separationHz: CHIME_SEPARATION_HZ,
   amplitude: 0.2,
-  stealthMode: true,
+  stealthMode: false,
 };
 
 const ModemContext = createContext<ModemContextValue | null>(null);
@@ -24,9 +25,7 @@ export function ModemProvider({ children }: ModemProviderProps): React.JSX.Eleme
   const setModemConfig = useCallback((next: Partial<typeof DEFAULT_MODEM_CONFIG>): void => {
     setConfig((prev) => {
       const merged = { ...prev, ...next };
-      if (merged.stealthMode && merged.baseFrequencyHz < 18_500) {
-        merged.baseFrequencyHz = 18_500;
-      }
+      merged.baseFrequencyHz = clampBaseFrequency(merged.baseFrequencyHz, merged.stealthMode);
       return merged;
     });
   }, []);

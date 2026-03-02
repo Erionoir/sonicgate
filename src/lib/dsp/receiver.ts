@@ -1,7 +1,7 @@
 import { crc8, decodeBytesToMessage } from "@/lib/dsp/encode";
 import { FramedBitDecoder, ManchesterDecoder } from "@/lib/dsp/decoder";
 import { ToneDetector } from "@/lib/dsp/detector";
-import { PREAMBLE_BYTES, PREAMBLE_SYNC_WORD, resolveFrequencyProfile } from "@/lib/dsp/protocol";
+import { CHIME_BASE_HZ, CHIME_SEPARATION_HZ, PREAMBLE_BYTES, PREAMBLE_SYNC_WORD, resolveFrequencyProfile } from "@/lib/dsp/protocol";
 import { ModemConfig, ToneDecision } from "@/types/modem";
 
 export type ReceiverEvents = {
@@ -54,11 +54,11 @@ export class SonicReceiver {
     this.rafId = null;
     this.nextSymbolTime = 0;
     this.config = {
-      baudRateMs: 50,
-      baseFrequencyHz: 18_500,
-      separationHz: 1_000,
+      baudRateMs: 80,
+      baseFrequencyHz: CHIME_BASE_HZ,
+      separationHz: CHIME_SEPARATION_HZ,
       amplitude: 0.2,
-      stealthMode: true,
+      stealthMode: false,
     };
     this.receivedBytes = [];
     this.syncBytes = [];
@@ -194,7 +194,7 @@ export class SonicReceiver {
     if (this.expectedPayloadLength === null) {
       this.expectedPayloadLength = decodedByte;
       if (this.expectedPayloadLength < 0 || this.expectedPayloadLength > 255) {
-        this.resetPacketState();
+        this.resetRuntimeState();
       }
       return;
     }
@@ -211,7 +211,7 @@ export class SonicReceiver {
 
     if (receivedCrc !== computedCrc) {
       this.events.onCrcError?.();
-      this.resetPacketState();
+      this.resetRuntimeState();
       return;
     }
 
@@ -219,7 +219,7 @@ export class SonicReceiver {
     const packetMessage: string = decodeBytesToMessage(payloadBytes);
     this.events.onPacket?.(packetMessage);
     this.events.onMessageChunk?.(packetMessage);
-    this.resetPacketState();
+    this.resetRuntimeState();
   }
 
   private hasPacketSignature(): boolean {
