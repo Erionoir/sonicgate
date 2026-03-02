@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { CalibrationPanel } from "@/components/receive/CalibrationPanel";
 import { EncryptionToggle } from "@/components/transmit/EncryptionToggle";
 import { Spectrogram } from "@/components/receive/Spectrogram";
 import { TerminalFeed } from "@/components/receive/TerminalFeed";
+import { useAudioModem } from "@/context/ModemContext";
 import { useReceiver } from "@/hooks/useReceiver";
 
 function detectIOSDevice(): boolean {
@@ -18,9 +19,10 @@ function detectIOSDevice(): boolean {
 }
 
 export function ListenPanel(): React.JSX.Element {
-  const [isIOSDevice, setIsIOSDevice] = useState(false);
+  const [isIOSDevice] = useState<boolean>(() => detectIOSDevice());
   const [showIOSWarning, setShowIOSWarning] = useState(false);
   const [dismissedIOSWarning, setDismissedIOSWarning] = useState(false);
+  const { modemConfig, setModemConfig } = useAudioModem();
 
   const {
     isListening,
@@ -38,10 +40,6 @@ export function ListenPanel(): React.JSX.Element {
     clear,
     calibrate,
   } = useReceiver();
-
-  useEffect(() => {
-    setIsIOSDevice(detectIOSDevice());
-  }, []);
 
   const handleStartListening = (): void => {
     if (isIOSDevice && !dismissedIOSWarning) {
@@ -113,6 +111,19 @@ export function ListenPanel(): React.JSX.Element {
       <CalibrationPanel threshold={noiseThreshold} isListening={isListening} onCalibrate={calibrate} />
       <div className="space-y-2">
         <EncryptionToggle encryption={encryption} onChange={setEncryption} />
+        <label className="block text-xs">
+          <span className="mb-1 block text-zinc-500">Protocol Compatibility</span>
+          <select
+            value={modemConfig.protocolMode}
+            onChange={(event) =>
+              setModemConfig({ protocolMode: event.target.value as typeof modemConfig.protocolMode })
+            }
+            className="w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-zinc-200"
+          >
+            <option value="enhanced">Enhanced (recommended)</option>
+            <option value="legacy">Legacy (older builds)</option>
+          </select>
+        </label>
         <p className="text-xs text-zinc-500">
           Decrypt pipeline: {decryptStatus === "idle" ? "ready" : decryptStatus}
         </p>

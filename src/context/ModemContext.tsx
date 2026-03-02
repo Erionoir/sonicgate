@@ -2,14 +2,15 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { CHIME_BASE_HZ, CHIME_SEPARATION_HZ, clampBaseFrequency } from "@/lib/dsp/protocol";
-import { ModemContextValue } from "@/types/modem";
+import { ModemConfig, ModemContextValue } from "@/types/modem";
 
-const DEFAULT_MODEM_CONFIG = {
+const DEFAULT_MODEM_CONFIG: ModemConfig = {
   baudRateMs: 80,
   baseFrequencyHz: CHIME_BASE_HZ,
   separationHz: CHIME_SEPARATION_HZ,
   amplitude: 0.4,
   stealthMode: false,
+  protocolMode: "enhanced",
 };
 
 const ModemContext = createContext<ModemContextValue | null>(null);
@@ -22,7 +23,7 @@ export function ModemProvider({ children }: ModemProviderProps): React.JSX.Eleme
   const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
   const [modemConfig, setConfig] = useState(DEFAULT_MODEM_CONFIG);
 
-  const setModemConfig = useCallback((next: Partial<typeof DEFAULT_MODEM_CONFIG>): void => {
+  const setModemConfig = useCallback((next: Partial<ModemConfig>): void => {
     setConfig((prev) => {
       const merged = { ...prev, ...next };
       merged.baseFrequencyHz = clampBaseFrequency(merged.baseFrequencyHz, merged.stealthMode);

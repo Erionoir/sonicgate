@@ -87,6 +87,18 @@ export function SignalSettings({ config, onChange }: SignalSettingsProps): React
           Stealth Mode (Ultrasonic)
         </label>
 
+        <label className="block">
+          <span className="mb-1 block text-zinc-400">Protocol Compatibility</span>
+          <select
+            value={config.protocolMode}
+            onChange={(event) => onChange({ protocolMode: event.target.value as ModemConfig["protocolMode"] })}
+            className="w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-zinc-200"
+          >
+            <option value="enhanced">Enhanced (recommended)</option>
+            <option value="legacy">Legacy (older builds)</option>
+          </select>
+        </label>
+
         {config.stealthMode && isMobileViewport ? (
           <p className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-xs text-amber-200">
             Stealth mode may not transmit reliably on mobile speakers and microphones.

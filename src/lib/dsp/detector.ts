@@ -18,6 +18,8 @@ export class ToneDetector {
 
   private profile: FrequencyProfile;
 
+  private unreliableStreak: number;
+
   constructor(analyser: AnalyserNode, profile: FrequencyProfile) {
     this.analyser = analyser;
     this.profile = profile;
@@ -26,6 +28,7 @@ export class ToneDetector {
     this.sampleBuffer = new Float32Array<ArrayBuffer>(new ArrayBuffer(this.analyser.fftSize * 4));
     this.noiseFloor = 0.0005;
     this.thresholdRatio = 1.35;
+    this.unreliableStreak = 0;
   }
 
   public setProfile(profile: FrequencyProfile): void {
@@ -98,7 +101,11 @@ export class ToneDetector {
       stronger > ABSOLUTE_ENERGY_FLOOR;
 
     if (!reliable) {
-      this.noiseFloor = this.noiseFloor * 0.94 + averageEnergy * 0.06;
+      this.unreliableStreak += 1;
+      const alpha: number = this.unreliableStreak > 80 ? 0.2 : 0.1;
+      this.noiseFloor = this.noiseFloor * (1 - alpha) + averageEnergy * alpha;
+    } else {
+      this.unreliableStreak = 0;
     }
 
     const confidence: number = stronger / Math.max(this.noiseFloor, 0.000001);

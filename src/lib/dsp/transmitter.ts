@@ -13,7 +13,7 @@ export class SonicTransmitter {
     config: ModemConfig,
     options?: TransmitOptions,
   ): Promise<void> {
-    const bits: number[] = encodeMessageToBits(message);
+    const bits: number[] = encodeMessageToBits(message, config.protocolMode);
     await this.sendBits(context, bits, config, options);
   }
 

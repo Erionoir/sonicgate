@@ -1,4 +1,4 @@
-import { FrequencyProfile } from "@/lib/dsp/protocol";
+import { FrequencyProfile, ProtocolMode } from "@/lib/dsp/protocol";
 
 export interface ModemConfig {
   baudRateMs: number;
@@ -6,6 +6,7 @@ export interface ModemConfig {
   separationHz: number;
   amplitude: number;
   stealthMode: boolean;
+  protocolMode: ProtocolMode;
 }
 
 export interface EncryptionConfig {

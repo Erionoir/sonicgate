@@ -2,8 +2,12 @@ import {
   BYTE_SIZE,
   CRC8_INIT,
   CRC8_POLY,
-  PREAMBLE_BYTES,
+  CRC16_INIT,
+  CRC16_POLY,
+  ENHANCED_PREAMBLE_BYTES,
+  LEGACY_PREAMBLE_BYTES,
   PREAMBLE_SYNC_WORD,
+  ProtocolMode,
   START_BIT,
   STOP_BIT,
 } from "@/lib/dsp/protocol";
@@ -50,6 +54,19 @@ export function crc8(input: number[] | Uint8Array): number {
   return crc;
 }
 
+export function crc16(input: number[] | Uint8Array): number {
+  let crc: number = CRC16_INIT;
+
+  for (let index: number = 0; index < input.length; index += 1) {
+    crc ^= ((input[index] ?? 0) & 0xff) << 8;
+    for (let bit: number = 0; bit < 8; bit += 1) {
+      crc = (crc & 0x8000) !== 0 ? ((crc << 1) ^ CRC16_POLY) & 0xffff : (crc << 1) & 0xffff;
+    }
+  }
+
+  return crc;
+}
+
 export function manchesterEncode(bits: number[]): number[] {
   const encoded: number[] = [];
 
@@ -65,21 +82,29 @@ export function manchesterEncode(bits: number[]): number[] {
   return encoded;
 }
 
-export function encodeMessageToBits(message: string): number[] {
+export function encodeMessageToBits(message: string, protocolMode: ProtocolMode = "enhanced"): number[] {
   const payloadBytes: Uint8Array = stringToUtf8Bytes(message);
 
   if (payloadBytes.length > 255) {
     throw new Error("Payload too large. Maximum encoded payload size is 255 bytes.");
   }
 
+  const preambleBytes: number[] = protocolMode === "legacy" ? LEGACY_PREAMBLE_BYTES : ENHANCED_PREAMBLE_BYTES;
   const packetBytes: number[] = [
-    ...PREAMBLE_BYTES,
+    ...preambleBytes,
     PREAMBLE_SYNC_WORD,
     payloadBytes.length,
     ...Array.from(payloadBytes),
   ];
-  const checksum: number = crc8([payloadBytes.length, ...Array.from(payloadBytes)]);
-  packetBytes.push(checksum);
+
+  if (protocolMode === "legacy") {
+    const checksum: number = crc8([payloadBytes.length, ...Array.from(payloadBytes)]);
+    packetBytes.push(checksum);
+  } else {
+    const checksum: number = crc16([payloadBytes.length, ...Array.from(payloadBytes)]);
+    packetBytes.push((checksum >> 8) & 0xff);
+    packetBytes.push(checksum & 0xff);
+  }
 
   const framedBits: number[] = [];
 

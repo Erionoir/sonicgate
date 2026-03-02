@@ -3,6 +3,8 @@ export type FrequencyProfile = {
   oneHz: number;
 };
 
+export type ProtocolMode = "legacy" | "enhanced";
+
 export const MIN_BAUD_MS: number = 10;
 export const MAX_BAUD_MS: number = 200;
 export const MIN_BASE_FREQUENCY_HZ: number = 300;
@@ -33,11 +35,14 @@ export const START_BIT = 0 as const;
 export const STOP_BIT = 1 as const;
 export const BYTE_SIZE: number = 8;
 
-export const PREAMBLE_BYTES: number[] = [0xaa, 0x55];
+export const LEGACY_PREAMBLE_BYTES: number[] = [0xaa, 0x55];
+export const ENHANCED_PREAMBLE_BYTES: number[] = [0xaa, 0x55, 0xaa, 0x55];
 export const PREAMBLE_SYNC_WORD: number = 0xf0;
 export const ABSOLUTE_ENERGY_FLOOR: number = 0.00001;
 export const CRC8_POLY: number = 0x31;
 export const CRC8_INIT: number = 0x00;
+export const CRC16_POLY: number = 0x1021;
+export const CRC16_INIT: number = 0xffff;
 
 export const DEFAULT_FFT_SIZE: number = 1024;
 export const DETECTION_WINDOW_SAMPLES: number = 256;

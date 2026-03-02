@@ -1,7 +1,14 @@
-import { crc8, decodeBytesToMessage } from "@/lib/dsp/encode";
+import { crc8, crc16, decodeBytesToMessage } from "@/lib/dsp/encode";
 import { FramedBitDecoder, ManchesterDecoder } from "@/lib/dsp/decoder";
 import { ToneDetector } from "@/lib/dsp/detector";
-import { CHIME_BASE_HZ, CHIME_SEPARATION_HZ, PREAMBLE_BYTES, PREAMBLE_SYNC_WORD, resolveFrequencyProfile } from "@/lib/dsp/protocol";
+import {
+  CHIME_BASE_HZ,
+  CHIME_SEPARATION_HZ,
+  ENHANCED_PREAMBLE_BYTES,
+  LEGACY_PREAMBLE_BYTES,
+  PREAMBLE_SYNC_WORD,
+  resolveFrequencyProfile,
+} from "@/lib/dsp/protocol";
 import { ModemConfig, ToneDecision } from "@/types/modem";
 
 export type ReceiverEvents = {
@@ -30,6 +37,8 @@ export class SonicReceiver {
 
   private nextSymbolTime: number;
 
+  private readonly symbolDecisionSamples: number;
+
   private config: ModemConfig;
 
   private readonly receivedBytes: number[];
@@ -53,12 +62,14 @@ export class SonicReceiver {
     this.manchesterDecoder = new ManchesterDecoder();
     this.rafId = null;
     this.nextSymbolTime = 0;
+    this.symbolDecisionSamples = 3;
     this.config = {
       baudRateMs: 80,
       baseFrequencyHz: CHIME_BASE_HZ,
       separationHz: CHIME_SEPARATION_HZ,
       amplitude: 0.4,
       stealthMode: false,
+      protocolMode: "enhanced",
     };
     this.receivedBytes = [];
     this.syncBytes = [];
@@ -154,7 +165,7 @@ export class SonicReceiver {
       }
 
       while (context.currentTime >= this.nextSymbolTime) {
-        const decision: ToneDecision = this.detector.detectBit();
+        const decision: ToneDecision = this.detectBitWithMajorityVote();
         this.events.onBit?.(decision);
 
         const logicalBit: 0 | 1 | null = this.manchesterDecoder.inputBit(decision.bit);
@@ -173,12 +184,52 @@ export class SonicReceiver {
     this.rafId = window.requestAnimationFrame(tick);
   }
 
+  private detectBitWithMajorityVote(): ToneDecision {
+    if (this.detector === null) {
+      return {
+        bit: null,
+        confidence: 0,
+        profile: resolveFrequencyProfile(this.config.baseFrequencyHz, this.config.separationHz),
+        zeroEnergy: 0,
+        oneEnergy: 0,
+      };
+    }
+
+    const decisions: ToneDecision[] = [];
+    for (let index: number = 0; index < this.symbolDecisionSamples; index += 1) {
+      decisions.push(this.detector.detectBit());
+    }
+
+    const onesCount: number = decisions.filter((decision: ToneDecision) => decision.bit === 1).length;
+    const zerosCount: number = decisions.filter((decision: ToneDecision) => decision.bit === 0).length;
+    const resolvedBit: 0 | 1 | null =
+      onesCount > zerosCount ? 1 : zerosCount > onesCount ? 0 : null;
+
+    const averagedConfidence: number =
+      decisions.reduce((sum: number, decision: ToneDecision) => sum + decision.confidence, 0) /
+      decisions.length;
+    const averagedZeroEnergy: number =
+      decisions.reduce((sum: number, decision: ToneDecision) => sum + decision.zeroEnergy, 0) /
+      decisions.length;
+    const averagedOneEnergy: number =
+      decisions.reduce((sum: number, decision: ToneDecision) => sum + decision.oneEnergy, 0) /
+      decisions.length;
+
+    return {
+      bit: resolvedBit,
+      confidence: averagedConfidence,
+      profile: decisions[0]?.profile ?? resolveFrequencyProfile(this.config.baseFrequencyHz, this.config.separationHz),
+      zeroEnergy: averagedZeroEnergy,
+      oneEnergy: averagedOneEnergy,
+    };
+  }
+
   private processDecodedByte(decodedByte: number): void {
     this.events.onByte?.(decodedByte);
 
     if (!this.lockedToPacket) {
       this.syncBytes.push(decodedByte);
-      const signatureLength: number = PREAMBLE_BYTES.length + 1;
+      const signatureLength: number = this.getPreambleBytes().length + 1;
       if (this.syncBytes.length > signatureLength) {
         this.syncBytes.shift();
       }
@@ -200,14 +251,14 @@ export class SonicReceiver {
     }
 
     this.packetPayloadBytes.push(decodedByte);
-    const requiredLength: number = this.expectedPayloadLength + 1;
+    const requiredLength: number = this.expectedPayloadLength + this.getChecksumLength();
     if (this.packetPayloadBytes.length < requiredLength) {
       return;
     }
 
     const payloadBytes: number[] = this.packetPayloadBytes.slice(0, this.expectedPayloadLength);
-    const receivedCrc: number = this.packetPayloadBytes[this.expectedPayloadLength] ?? 0;
-    const computedCrc: number = crc8([this.expectedPayloadLength, ...payloadBytes]);
+    const receivedCrc: number = this.readChecksum(payloadBytes.length);
+    const computedCrc: number = this.computeChecksum(payloadBytes);
 
     if (receivedCrc !== computedCrc) {
       this.events.onCrcError?.();
@@ -223,18 +274,45 @@ export class SonicReceiver {
   }
 
   private hasPacketSignature(): boolean {
-    const signatureLength: number = PREAMBLE_BYTES.length + 1;
+    const preambleBytes: number[] = this.getPreambleBytes();
+    const signatureLength: number = preambleBytes.length + 1;
     if (this.syncBytes.length !== signatureLength) {
       return false;
     }
 
-    for (let index: number = 0; index < PREAMBLE_BYTES.length; index += 1) {
-      if ((this.syncBytes[index] ?? -1) !== PREAMBLE_BYTES[index]) {
+    for (let index: number = 0; index < preambleBytes.length; index += 1) {
+      if ((this.syncBytes[index] ?? -1) !== preambleBytes[index]) {
         return false;
       }
     }
 
-    return (this.syncBytes[PREAMBLE_BYTES.length] ?? -1) === PREAMBLE_SYNC_WORD;
+    return (this.syncBytes[preambleBytes.length] ?? -1) === PREAMBLE_SYNC_WORD;
+  }
+
+  private getPreambleBytes(): number[] {
+    return this.config.protocolMode === "legacy" ? LEGACY_PREAMBLE_BYTES : ENHANCED_PREAMBLE_BYTES;
+  }
+
+  private getChecksumLength(): number {
+    return this.config.protocolMode === "legacy" ? 1 : 2;
+  }
+
+  private readChecksum(payloadLength: number): number {
+    if (this.config.protocolMode === "legacy") {
+      return this.packetPayloadBytes[payloadLength] ?? 0;
+    }
+
+    const receivedCrcHigh: number = this.packetPayloadBytes[payloadLength] ?? 0;
+    const receivedCrcLow: number = this.packetPayloadBytes[payloadLength + 1] ?? 0;
+    return ((receivedCrcHigh & 0xff) << 8) | (receivedCrcLow & 0xff);
+  }
+
+  private computeChecksum(payloadBytes: number[]): number {
+    if (this.config.protocolMode === "legacy") {
+      return crc8([this.expectedPayloadLength ?? 0, ...payloadBytes]);
+    }
+
+    return crc16([this.expectedPayloadLength ?? 0, ...payloadBytes]);
   }
 
   private resetPacketState(): void {
